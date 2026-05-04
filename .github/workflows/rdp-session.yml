@@ -576,12 +576,6 @@ jobs:
             if ($LASTEXITCODE -ne 0) {
               Write-Host "WARNING: OpenClaw completion state generation failed, but startup will continue"
             }
-
-            $doctorOutput = openclaw doctor --fix 2>&1 | Out-String
-            Write-Host "OpenClaw doctor --fix output:`n$doctorOutput"
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "WARNING: OpenClaw doctor --fix reported issues, but startup will continue"
-            }
           } else {
             Write-Host "WARNING: openclaw command not found for doctor validation"
           }
@@ -813,6 +807,28 @@ jobs:
         run: |
           $rdpUserHome = "${{ steps.rdpuser.outputs.RDPUSER_HOME }}"
           $password = $env:RDP_PASSWORD
+          $env:NPM_CONFIG_PREFIX = "$rdpUserHome\.npm-global"
+          $env:PATH = "$rdpUserHome\.npm-global;$env:PATH"
+
+          # Prefer the built-in gateway install when available, but keep the
+          # existing scheduled-task launch as a fallback.
+          if (Get-Command openclaw -ErrorAction SilentlyContinue) {
+            $gatewayInstallOutput = openclaw gateway install 2>&1 | Out-String
+            Write-Host "OpenClaw gateway install output:`n$gatewayInstallOutput"
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "WARNING: openclaw gateway install failed, continuing with fallback startup"
+            }
+          } else {
+            Write-Host "WARNING: openclaw command not found, continuing with fallback startup"
+          }
+
+          if (Get-Command openclaw -ErrorAction SilentlyContinue) {
+            $doctorOutput = openclaw doctor --fix 2>&1 | Out-String
+            Write-Host "OpenClaw doctor --fix output:`n$doctorOutput"
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "WARNING: OpenClaw doctor --fix reported issues, but startup will continue"
+            }
+          }
           
           # Create startup script (with stderr capture for crash diagnosis)
           $scriptContent = '$env:PATH = "C:\Users\rdpuser\.npm-global;" + $env:PATH' + "`r`n"
