@@ -24,7 +24,7 @@ env:
 
 jobs:
   rdp-session:
-    
+    runs-on: windows-latest
     timeout-minutes: 360
 
     steps:
@@ -571,10 +571,10 @@ jobs:
           $env:PATH = "$rdpUserHome\.npm-global;$env:PATH"
 
           if (Get-Command openclaw -ErrorAction SilentlyContinue) {
-            $doctorOutput = openclaw doctor 2>&1 | Out-String
-            Write-Host "OpenClaw doctor output:`n$doctorOutput"
+            $doctorOutput = openclaw doctor --fix 2>&1 | Out-String
+            Write-Host "OpenClaw doctor --fix output:`n$doctorOutput"
             if ($LASTEXITCODE -ne 0) {
-              Write-Host "WARNING: OpenClaw doctor reported issues, but startup will continue"
+              Write-Host "WARNING: OpenClaw doctor --fix reported issues, but startup will continue"
             }
           } else {
             Write-Host "WARNING: openclaw command not found for doctor validation"
