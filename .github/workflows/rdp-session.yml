@@ -534,6 +534,16 @@ jobs:
             
             $config | Out-File -FilePath "$openclawDir\openclaw.json" -Encoding UTF8
             Write-Host "Injected openclaw.json from secret (paths fixed to $rdpUserHome)"
+
+            # Rewrite the file as canonical JSON so small formatting defects do not
+            # trip OpenClaw startup.
+            try {
+              $normalizedConfig = Get-Content "$openclawDir\openclaw.json" -Raw | ConvertFrom-Json | ConvertTo-Json -Depth 20
+              [System.IO.File]::WriteAllText("$openclawDir\openclaw.json", $normalizedConfig, (New-Object System.Text.UTF8Encoding($false)))
+              Write-Host "Normalized openclaw.json after injection"
+            } catch {
+              Write-Host "WARNING: Could not normalize openclaw.json: $_"
+            }
           } else {
             Write-Host "ERROR: No OPENCLAW_CONFIG secret found"
             exit 1
@@ -550,7 +560,26 @@ jobs:
           $null = cmd /c "icacls `"$openclawDir`" /grant rdpuser:(OI)(CI)F /T /Q 2>&1"
           $global:LASTEXITCODE = 0
           Write-Host "OpenClaw configured"
-          
+
+      - name: Validate OpenClaw with doctor
+        shell: pwsh
+        run: |
+          $rdpUserHome = "${{ steps.rdpuser.outputs.RDPUSER_HOME }}"
+          $env:OPENCLAW_STATE_DIR = "$rdpUserHome\.openclaw"
+          $env:OPENCLAW_WORKSPACE = "$rdpUserHome\.openclaw\workspace"
+          $env:NPM_CONFIG_PREFIX = "$rdpUserHome\.npm-global"
+          $env:PATH = "$rdpUserHome\.npm-global;$env:PATH"
+
+          if (Get-Command openclaw -ErrorAction SilentlyContinue) {
+            $doctorOutput = openclaw doctor 2>&1 | Out-String
+            Write-Host "OpenClaw doctor output:`n$doctorOutput"
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "WARNING: OpenClaw doctor reported issues, but startup will continue"
+            }
+          } else {
+            Write-Host "WARNING: openclaw command not found for doctor validation"
+          }
+
       # ========== PATCH OPENCLAW ==========
       - name: Patch OpenClaw (Antigravity models + endpoints)
         shell: pwsh
@@ -784,6 +813,7 @@ jobs:
           $scriptContent += '$env:PLAYWRIGHT_CHROMIUM_USE_HEADLESS_NEW = "1"' + "`r`n"
           $scriptContent += '$env:PLAYWRIGHT_BROWSERS_PATH = "C:\Users\rdpuser\.playwright-browsers"' + "`r`n"
           $scriptContent += '$logFile = "C:\Users\rdpuser\.openclaw\gateway-crash.log"' + "`r`n"
+          $scriptContent += 'if (Get-Command openclaw -ErrorAction SilentlyContinue) { $doctorOutput = openclaw doctor 2>&1 | Out-String; Write-Host $doctorOutput; if ($LASTEXITCODE -ne 0) { Write-Host "WARNING: openclaw doctor failed, continuing with fallback startup" } } else { Write-Host "WARNING: openclaw command not found, continuing with fallback startup" }' + "`r`n"
           $scriptContent += 'Start-Process -WindowStyle Hidden -FilePath "node" -ArgumentList "C:\Users\rdpuser\.npm-global\node_modules\openclaw\openclaw.mjs", "gateway" -WorkingDirectory "C:\Users\rdpuser\.openclaw" -RedirectStandardError $logFile'
           $scriptPath = "$rdpUserHome\start-openclaw.ps1"
           $scriptContent | Out-File -FilePath $scriptPath -Encoding UTF8
