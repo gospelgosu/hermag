@@ -571,6 +571,12 @@ jobs:
           $env:PATH = "$rdpUserHome\.npm-global;$env:PATH"
 
           if (Get-Command openclaw -ErrorAction SilentlyContinue) {
+            $completionOutput = openclaw completion --write-state 2>&1 | Out-String
+            Write-Host "OpenClaw completion --write-state output:`n$completionOutput"
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "WARNING: OpenClaw completion state generation failed, but startup will continue"
+            }
+
             $doctorOutput = openclaw doctor --fix 2>&1 | Out-String
             Write-Host "OpenClaw doctor --fix output:`n$doctorOutput"
             if ($LASTEXITCODE -ne 0) {
